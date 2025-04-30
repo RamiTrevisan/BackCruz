@@ -25,7 +25,7 @@ namespace Web.Controllers
 
         // GET: api/User
         [HttpGet]
-        //[Authorize(Roles = "Admin")] // Descomentar cuando implementes autenticación
+        [Authorize(Roles = "Admin")] 
         public async Task<ActionResult<IEnumerable<UserDto>>> GetUsers()
         {
             var users = await _userService.GetAllUsersAsync();
@@ -34,7 +34,7 @@ namespace Web.Controllers
 
         // GET: api/User/5
         [HttpGet("{id}")]
-        //[Authorize] // Descomentar cuando implementes autenticación
+        [Authorize]
         public async Task<ActionResult<UserDto>> GetUser(int id)
         {
             var user = await _userService.GetUserByIdAsync(id);
@@ -46,7 +46,7 @@ namespace Web.Controllers
 
         // POST: api/User
         [HttpPost]
-        //[Authorize(Roles = "Admin")] // Descomentar cuando implementes autenticación
+        [Authorize(Roles = "Admin")]
         public async Task<ActionResult<UserDto>> CreateUser(CreateUserDto createUserDto)
         {
             try
@@ -78,7 +78,7 @@ namespace Web.Controllers
 
         // PUT: api/User/5
         [HttpPut("{id}")]
-        //[Authorize] // Descomentar cuando implementes autenticación
+        [Authorize] 
         public async Task<IActionResult> UpdateUser(int id, UserDto userDto)
         {
             if (id != userDto.Id)
@@ -106,7 +106,7 @@ namespace Web.Controllers
 
         // DELETE: api/User/5
         [HttpDelete("{id}")]
-        //[Authorize(Roles = "Admin")] // Descomentar cuando implementes autenticación
+        [Authorize(Roles = "Admin")] 
         public async Task<IActionResult> DeleteUser(int id)
         {
             try
@@ -124,25 +124,23 @@ namespace Web.Controllers
             }
         }
 
-        // POST: api/User/authenticate
         [HttpPost("authenticate")]
         [AllowAnonymous]
-        public async Task<ActionResult<UserDto>> Authenticate([FromBody] AuthenticateDto model)
+        public async Task<ActionResult<object>> Authenticate([FromBody] AuthenticateDto model)
         {
-            var user = await _userService.AuthenticateAsync(model.Username, model.Password);
+            var response = await _userService.AuthenticateAsync(model.Username, model.Password);
 
-            if (user == null)
-                return BadRequest(new { message = "Username or password is incorrect" });
+            if (response == null)
+                return BadRequest(new { message = "Usuario o contraseña incorrectos" });
 
-            // En una implementación completa, aquí generarías un token JWT
-            // var token = _jwtService.GenerateToken(user);
+            var userDto = _mapper.Map<UserDto>(response.User);
 
-            // Mapear usuario a DTO
-            var userDto = _mapper.Map<UserDto>(user);
-
-            // Retornar usuario con token
-            // return Ok(new { User = userDto, Token = token });
-            return Ok(new { User = userDto });
+            return Ok(new
+            {
+                Token = response.Token,
+                User = userDto
+            });
         }
+
     }
 }

@@ -1,8 +1,14 @@
-﻿using Application.Interfaces;
+﻿using Application.DTOs;
+using Application.Interfaces;
 using Domain.Entities;
 using Domain.Interfaces;
+using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
 using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace Application.Services
@@ -10,7 +16,12 @@ namespace Application.Services
     public class UserService : IUserService
     {
         private readonly IUserRepository _userRepository;
-
+        private readonly IConfiguration _configuration; 
+        public UserService(IUserRepository userRepository, IConfiguration configuration)
+        {
+            _userRepository = userRepository;
+            _configuration = configuration;
+        }
         public UserService(IUserRepository userRepository)
         {
             _userRepository = userRepository;
@@ -26,13 +37,43 @@ namespace Application.Services
             return await _userRepository.GetByIdAsync(id);
         }
 
-        public async Task<User> AuthenticateAsync(string username, string password)
+        public async Task<AuthenticateResponseDto> AuthenticateAsync(string username, string password)
         {
             if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
                 return null;
 
-            return await _userRepository.AuthenticateAsync(username, password);
+            var user = await _userRepository.AuthenticateAsync(username, password);
+            if (user == null)
+                return null;
+
+            var jwtSettings = _configuration.GetSection("JwtSettings");
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Secret"]));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            var claims = new[]
+            {
+        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+        new Claim(ClaimTypes.Name, user.Username),
+        new Claim(ClaimTypes.Role, user.Role?.Name ?? "User")
+    };
+
+            var token = new JwtSecurityToken(
+                issuer: jwtSettings["Issuer"],
+                audience: jwtSettings["Audience"],
+                claims: claims,
+                expires: DateTime.UtcNow.AddMinutes(Convert.ToDouble(jwtSettings["DurationInMinutes"])),
+                signingCredentials: creds
+            );
+
+            var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
+
+            return new AuthenticateResponseDto
+            {
+                Token = tokenString,
+                User = user
+            };
         }
+
 
         public async Task<User> CreateUserAsync(User user, string password)
         {
